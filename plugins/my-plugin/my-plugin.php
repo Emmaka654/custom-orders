@@ -16,11 +16,13 @@
 * Domain Path:       /languages
 */
 
+const COLUMN_ID = 'order_status';
+
 // Функция для проверки наличия типа записи
 function check_order_post_type()
 {
     // Проверяем, зарегистрирован ли тип записи 'order'
-    if (post_type_exists('order')) {
+    if (post_type_exists('custom_order')) {
         return;
     }
 
@@ -37,7 +39,6 @@ function check_order_post_type()
 // Хук для проверки наличия типа записи при активации плагина
 register_activation_hook(__FILE__, 'check_order_post_type');
 
-const COLUMN_ID = 'order_status';
 //функция __() принимает два параметра: строку для перевода и текстовый домен
 //добавляем массив с колонками нашу колонку
 function register_column(array $columns): array
@@ -79,7 +80,8 @@ function render_column($column_id, $post_id)
 add_action('manage_posts_custom_column', 'render_column', 10, 2);//параметры 10 и 2 обозначают приоритет и количество аргументов
 
 // Обработчик AJAX-запроса для обновления статуса заказа
-function update_order_status() {
+function update_order_status()
+{
     // Проверяем nonce
     check_ajax_referer('update_order_status_nonce', 'nonce'); //проверяем, совпадают ли переданный и сгенерированный
 
@@ -110,10 +112,8 @@ add_action('wp_ajax_update_order_status', 'update_order_status');
 
 
 //Подключение JavaScript
-function enqueue_admin_scripts() {
-    // Подключаем jQuery
-    wp_enqueue_script('jquery');
-
+function enqueue_admin_scripts()
+{
     // Подключаем JS файл
     wp_enqueue_script('admin-script', plugin_dir_url(__FILE__) . 'admin.js', array('jquery'), null, true);
 
