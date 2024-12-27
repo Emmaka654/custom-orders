@@ -47,7 +47,7 @@ function register_column(array $columns): array
     return $columns;
 }
 
-add_filter('manage_posts_columns', 'register_column');
+add_filter('manage_edit-custom_order_columns', 'register_column');
 
 // Отображаем order_status
 function render_column($column_id, $post_id)
@@ -77,7 +77,7 @@ function render_column($column_id, $post_id)
     echo '</select>';
 }
 
-add_action('manage_posts_custom_column', 'render_column', 10, 2);//параметры 10 и 2 обозначают приоритет и количество аргументов
+add_action('manage_custom_order_posts_custom_column', 'render_column', 10, 2);//параметры 10 и 2 обозначают приоритет и количество аргументов
 
 // Обработчик AJAX-запроса для обновления статуса заказа
 function update_order_status()
