@@ -125,3 +125,191 @@ function enqueue_admin_scripts()
 }
 
 add_action('admin_enqueue_scripts', 'enqueue_admin_scripts');
+
+// Добавляем мета-бокс для заказов
+function add_custom_order_meta_box()
+{
+    add_meta_box(
+        'custom_order_products', // ID мета-бокса
+        'Товары в заказе', // Заголовок
+        'render_custom_order_meta_box', // Функция для отрисовки
+        'custom_order', // Тип поста
+        'normal', // Контекст
+        'high' // Приоритет
+    );
+}
+
+add_action('add_meta_boxes', 'add_custom_order_meta_box');
+
+// Функция для отрисовки мета-бокса
+function render_custom_order_meta_box($post)
+{
+    // Получаем сохраненные товары
+    $products = get_field('products', $post->ID);
+
+    // Добавления нового товара
+    echo '<div style="margin-bottom: 20px;">';
+    echo '<h3>Добавить товар в заказ</h3>';
+    echo '<select name="new_product_id" id="new_product_id">';
+    echo '<option value="">Выберите товар</option>';
+
+    // Получаем все товары
+    $all_products = get_posts(array(
+        'post_type' => 'product',
+        'numberposts' => -1, //Берем все посты
+    ));
+
+    foreach ($all_products as $product) {
+        echo '<option value="' . esc_attr($product->ID) . '">' . esc_html($product->post_title) . '</option>';
+    }
+
+    echo '</select>';
+    echo '<input type="number" name="new_product_quantity" id="new_product_quantity" min="1" value="1" required>';
+    echo '<button type="button" id="add-product-button" class="button">Добавить товар</button>';
+    echo '</div>';
+
+    if ($products) {
+        echo '<table class="widefat fixed">';
+        echo '<thead><tr>
+                <th>Изображение</th>
+                <th>Название</th>
+                <th>Описание</th>
+                <th>Цена</th>
+                <th>Размер</th>
+                <th>Цвет</th>
+                <th>Рейтинг</th>
+                <th>Количество</th>
+                <th>Действия</th>
+                <th>Цена за данное количество товара</th>
+              </tr></thead>';
+        echo '<tbody>';
+
+        $totalSumOfOrder = 0;
+        foreach ($products as $index => $product) {
+            $totalSumOfProduct = $product['price'] * $product['quantity'];
+            $totalSumOfOrder += $totalSumOfProduct;
+            echo '<tr>';
+            echo '<td><img src="' . esc_url($product['image']) . '" width="50" height="50"></td>';
+            echo '<td>' . esc_html($product['name']) . '</td>';
+            echo '<td>' . esc_html($product['description']) . '</td>';
+            echo '<td>' . esc_html($product['price']) . '</td>';
+            echo '<td>' . esc_html(implode(', ', $product['size'])) . '</td>';
+            echo '<td>' . esc_html($product['color']) . '</td>';
+            echo '<td>' . esc_html($product['rating']) . '</td>';
+            echo '<td><input type="number" name="products[' . $index . '][quantity]" value="' . esc_attr($product['quantity']) . '" min="1"></td>';
+            echo '<td><button type="button" class="button remove-product" data-index="' . $index . '">Удалить</button></td>';
+            echo '<td>' . $totalSumOfProduct . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+        echo '<div>' . 'Сумма заказа: ' . $totalSumOfOrder . '</div>';
+        echo '<button type="submit" name="update_quantities" class="button button-primary">Сохранить изменения</button>';
+    } else {
+        echo '<p>Товары отсутствуют.</p>';
+
+    }
+}
+
+// Сохранение изменений в мета-боксе
+function save_custom_order_meta_box($post_id)
+{
+    // Проверяем, не является ли это автосохранением
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
+        return;
+    }
+
+    // Обработка изменения количества существующих товаров
+    if (isset($_POST['products'])) {
+        $products = get_field('products', $post_id);
+
+        // Обновляем количество товаров
+        foreach ($_POST['products'] as $index => $data) {
+            if (isset($products[$index])) {
+                $products[$index]['quantity'] = intval($data['quantity']);
+            }
+        }
+
+        // Сохраняем обновленный список товаров
+        update_field('products', $products, $post_id);
+    }
+}
+
+add_action('save_post_custom_order', 'save_custom_order_meta_box');
+
+function remove_product_from_order()
+{
+
+    $post_id = intval($_POST['post_id']);
+    $index = intval($_POST['index']);
+
+    $products = get_field('products', $post_id);
+    if (isset($products[$index])) {
+        unset($products[$index]);
+        $products = array_values($products); // Переиндексируем массив
+        update_field('products', $products, $post_id);
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Product not found.');
+    }
+
+    exit();
+}
+
+add_action('wp_ajax_remove_product_from_order', 'remove_product_from_order');
+
+function add_product_to_order()
+{
+
+    $post_id = intval($_POST['post_id']);
+    $product_id = intval($_POST['product_id']);
+    $quantity = intval($_POST['quantity']);
+
+    if ($product_id <= 0 || $quantity <= 0) {
+        wp_send_json_error('Invalid product ID or quantity.');
+        return;
+    }
+
+    $product = get_post($product_id);
+    if (!$product) {
+        wp_send_json_error('Product not found.');
+        return;
+    }
+
+    $products = get_field('products', $post_id);
+    if (!is_array($products)) {
+        $products = [];
+    }
+
+    // Проверяем, есть ли уже такой товар в заказе
+    $product_exists = false;
+    foreach ($products as &$existing_product) { //любые изменения, которые мы вносим в $existing_product, будут напрямую изменять соответствующий элемент в массиве $products.
+        if ($existing_product['id'] == $product_id) {
+            $existing_product['quantity'] += $quantity;
+            $product_exists = true;
+            break;
+        }
+    }
+
+    // Если товара нет в заказе, добавляем его
+    if (!$product_exists) {
+        $products[] = [
+            'id' => $product_id,
+            'name' => $product->post_title,
+            'image' => get_the_post_thumbnail_url($product_id, 'thumbnail'),
+            'description' => $product->post_content,
+            'price' => get_post_meta($product_id, 'price', true),
+            'size' => get_post_meta($product_id, 'size', true),
+            'color' => get_post_meta($product_id, 'color', true),
+            'rating' => get_post_meta($product_id, 'product_rating', true),
+            'quantity' => $quantity,
+        ];
+    }
+
+    // Сохраняем обновленный список товаров
+    update_field('products', $products, $post_id);
+
+    wp_send_json_success(['message' => 'Товар успешно добавлен в заказ.']);
+}
+
+add_action('wp_ajax_add_product_to_order', 'add_product_to_order');
