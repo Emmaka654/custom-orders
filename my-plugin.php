@@ -1,7 +1,7 @@
 <?php
 
 /*
-* Plugin Name:       my-plugin
+* Plugin Name:       Custom orders
 * Plugin URI:        http://localhost/wp/plugins/
 * Description:       Handle the basics with this plugin.
 * Version:           1.0.0
